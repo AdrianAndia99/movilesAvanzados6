@@ -17,11 +17,16 @@ namespace Game.Gameplay
         {
             if (IsServer)
             {
+                Debug.Log("[GameplaySpawner] OnNetworkSpawn (Server) subscribing to OnLoadComplete");
                 NetworkManager.SceneManager.OnLoadComplete += OnSceneLoadComplete;
+            }
+            else
+            {
+                Debug.Log("[GameplaySpawner] OnNetworkSpawn (Client) - no subscription");
             }
         }
 
-        private void OnDestroy()
+    private new void OnDestroy()
         {
             if (NetworkManager != null && NetworkManager.SceneManager != null)
             {
@@ -35,17 +40,23 @@ namespace Game.Gameplay
 
             if (!_spawned)
             {
+                Debug.Log($"[GameplaySpawner] OnLoadComplete triggered by client {clientId} for scene '{sceneName}' loadMode={loadSceneMode}. Spawning players now.");
                 SpawnAllPlayers();
                 _spawned = true;
+            }
+            else
+            {
+                Debug.Log("[GameplaySpawner] OnLoadComplete called but spawn already happened.");
             }
         }
 
         private void SpawnAllPlayers()
         {
+            Debug.Log("[GameplaySpawner] SpawnAllPlayers start");
             var lobbyManager = LobbyManager.Instance;
             if (lobbyManager == null)
             {
-                Debug.LogError("No LobbyManager found in gameplay scene.");
+                Debug.LogError("[GameplaySpawner] No LobbyManager found in gameplay scene.");
                 return;
             }
 
@@ -53,11 +64,12 @@ namespace Game.Gameplay
             if (characterDatabase == null)
             {
                 characterDatabase = lobbyManager.CharacterDatabase;
+                Debug.Log("[GameplaySpawner] Adopted CharacterDatabase from LobbyManager");
             }
 
             if (characterDatabase == null)
             {
-                Debug.LogError("CharacterDatabase no asignado en GameplaySpawner.");
+                Debug.LogError("[GameplaySpawner] CharacterDatabase no asignado en GameplaySpawner.");
                 return;
             }
 
@@ -67,6 +79,7 @@ namespace Game.Gameplay
             foreach (var lp in playersSnapshot)
             {
                 selections[lp.OwnerClientIdCached] = lp.CharacterIndex.Value;
+                Debug.Log($"[GameplaySpawner] Cached selection ClientId={lp.OwnerClientIdCached} CharIndex={lp.CharacterIndex.Value}");
             }
 
             // 2. Despawn de los player objects actuales (LobbyPlayer)
@@ -74,7 +87,12 @@ namespace Game.Gameplay
             {
                 if (lp != null && lp.NetworkObject != null && lp.NetworkObject.IsSpawned)
                 {
+                    Debug.Log($"[GameplaySpawner] Despawning lobby player object for ClientId={lp.OwnerClientIdCached}");
                     lp.NetworkObject.Despawn(true); // true => destruir instancia server-side
+                }
+                else
+                {
+                    Debug.LogWarning("[GameplaySpawner] LobbyPlayer missing or not spawned while attempting despawn.");
                 }
             }
 
@@ -87,7 +105,7 @@ namespace Game.Gameplay
                 var prefab = characterDatabase.Get(charIndex);
                 if (prefab == null)
                 {
-                    Debug.LogWarning($"Missing character prefab for index {charIndex}, defaulting index 0");
+                    Debug.LogWarning($"[GameplaySpawner] Missing character prefab for index {charIndex}, defaulting index 0");
                     prefab = characterDatabase.Get(0);
                     if (prefab == null) continue;
                 }
@@ -105,19 +123,22 @@ namespace Game.Gameplay
                     rot = Quaternion.identity;
                 }
 
+                Debug.Log($"[GameplaySpawner] Spawning character for ClientId={clientId} CharIndex={charIndex} at {pos}");
                 var instance = Instantiate(prefab, pos, rot);
                 var netObj = instance.GetComponent<NetworkObject>();
                 if (netObj == null)
                 {
-                    Debug.LogError("Character prefab missing NetworkObject component");
+                    Debug.LogError("[GameplaySpawner] Character prefab missing NetworkObject component");
                     Destroy(instance);
                     continue;
                 }
 
                 // Importante: SpawnAsPlayerObject hará que este nuevo objeto sea el PlayerObject del cliente
                 netObj.SpawnAsPlayerObject(clientId, true);
+                Debug.Log($"[GameplaySpawner] Spawned PlayerObject NetId={netObj.NetworkObjectId} for ClientId={clientId}");
                 i++;
             }
+            Debug.Log("[GameplaySpawner] SpawnAllPlayers complete");
         }
     }
 }
